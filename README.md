@@ -20,3 +20,13 @@ Enter PIP mode manually
 FlutterAutoPip.enterPipMode()
 ```
 
+PIP mode entered listener
+```dart
+FlutterAutoPip.onPipModeEntered.listen(..)
+```
+
+PIP mode exited listener
+```
+Not implemented.  
+Because I couldn't figure out how to override the activity callback "onPictureInPictureModeChanged" method
+```
