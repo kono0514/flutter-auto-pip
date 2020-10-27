@@ -1,6 +1,7 @@
 package com.kono.flutter_auto_pip
 
 import android.app.PictureInPictureParams
+import android.content.res.Configuration
 import android.os.Build
 import androidx.annotation.NonNull
 
@@ -17,7 +18,7 @@ import io.flutter.plugin.common.PluginRegistry
 import io.flutter.plugin.common.PluginRegistry.Registrar
 
 /** FlutterAutoPipPlugin */
-class FlutterAutoPipPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, ActivityAware, PluginRegistry.UserLeaveHintListener {
+class FlutterAutoPipPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, ActivityAware, PluginRegistry.UserLeaveHintListener, OnPictureInPictureModeListener {
   /// The MethodChannel that will the communication between Flutter and native Android
   ///
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
@@ -78,13 +79,8 @@ class FlutterAutoPipPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Act
     if (activityPluginBinding != null) {
       if (Build.VERSION.SDK_INT > 26) {
         activityPluginBinding!!.activity.enterPictureInPictureMode(PictureInPictureParams.Builder().build())
-        // Activity callback onPictureInPictureModeChanged() should be
-        // used to provide PIP mode status (both enabled, disabled) to Flutter side. But we couldn't
-        // figure out how to override onPictureInPictureModeChanged in plugin.
-        eventSink?.success(true)
       } else if (Build.VERSION.SDK_INT > 24) {
         activityPluginBinding!!.activity.enterPictureInPictureMode()
-        eventSink?.success(true)
       }
     }
   }
@@ -92,10 +88,16 @@ class FlutterAutoPipPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Act
   private fun setActivityBinding(binding: ActivityPluginBinding) {
     activityPluginBinding = binding
     activityPluginBinding?.addOnUserLeaveHintListener(this)
+    if (activityPluginBinding?.activity is FlutterAutoPipActivity) {
+      (activityPluginBinding?.activity as FlutterAutoPipActivity).onPictureInPictureModeListener = this
+    }
   }
 
   private fun unSetActivityBinding() {
     activityPluginBinding?.removeOnUserLeaveHintListener(this)
+    if (activityPluginBinding?.activity is FlutterAutoPipActivity) {
+      (activityPluginBinding?.activity as FlutterAutoPipActivity).onPictureInPictureModeListener = null
+    }
     activityPluginBinding = null
   }
 
@@ -105,5 +107,9 @@ class FlutterAutoPipPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Act
 
   override fun onCancel(arguments: Any?) {
     eventSink = null
+  }
+
+  override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration?) {
+    eventSink?.success(isInPictureInPictureMode);
   }
 }

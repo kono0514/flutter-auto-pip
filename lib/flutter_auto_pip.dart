@@ -21,7 +21,7 @@ class FlutterAutoPip {
     await _channel.invokeMethod('enterPipMode');
   }
 
-  static Stream<bool> get onPipModeEntered => _event
+  static Stream<bool> get onPipModeChanged => _event
       .receiveBroadcastStream()
       .map((event) => event as bool);
 }
