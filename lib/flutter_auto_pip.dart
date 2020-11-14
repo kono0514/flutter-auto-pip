@@ -17,9 +17,11 @@ class FlutterAutoPip {
     await _channel.invokeMethod('autoPipModeDisable');
   }
 
-  static void enterPipMode() async {
-    await _channel.invokeMethod('enterPipMode');
-  }
+  static Future<bool> enterPipMode() async =>
+      await _channel.invokeMethod('enterPipMode');
+
+  static Future<bool> isPipSupported() async =>
+      await _channel.invokeMethod('isPipSupported');
 
   static Stream<bool> get onPipModeChanged => _event
       .receiveBroadcastStream()

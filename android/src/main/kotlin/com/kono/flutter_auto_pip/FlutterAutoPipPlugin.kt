@@ -1,6 +1,8 @@
 package com.kono.flutter_auto_pip
 
+import android.app.AppOpsManager
 import android.app.PictureInPictureParams
+import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import androidx.annotation.NonNull
@@ -8,14 +10,12 @@ import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
-import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.*
 import io.flutter.plugin.common.EventChannel.StreamHandler
-import io.flutter.plugin.common.MethodCall
-import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import io.flutter.plugin.common.PluginRegistry
 import io.flutter.plugin.common.PluginRegistry.Registrar
+import java.lang.Exception
 
 /** FlutterAutoPipPlugin */
 class FlutterAutoPipPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, ActivityAware, PluginRegistry.UserLeaveHintListener, OnPictureInPictureModeListener {
@@ -47,7 +47,13 @@ class FlutterAutoPipPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Act
     } else if (call.method == "autoPipModeDisable") {
       enterPipOnUserLeaveHint = false
     } else if (call.method == "enterPipMode") {
-      enterPipMode()
+      try {
+        result.success(enterPipMode())
+      } catch (e: PIPException) {
+        result.error("PIP_EXCEPTION", e.message, null)
+      }
+    } else if (call.method == "isPipSupported") {
+      result.success(supportsPipMode())
     } else {
       result.notImplemented()
     }
@@ -71,18 +77,45 @@ class FlutterAutoPipPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Act
 
   override fun onUserLeaveHint() {
     if (enterPipOnUserLeaveHint) {
-      enterPipMode()
+      try {
+        enterPipMode()
+      } catch (e: Exception) {
+        //
+      }
     }
   }
 
-  private fun enterPipMode() {
-    if (activityPluginBinding != null) {
-      if (Build.VERSION.SDK_INT > 26) {
-        activityPluginBinding!!.activity.enterPictureInPictureMode(PictureInPictureParams.Builder().build())
-      } else if (Build.VERSION.SDK_INT > 24) {
-        activityPluginBinding!!.activity.enterPictureInPictureMode()
+  private fun supportsPipMode(): Boolean {
+    return Build.VERSION.SDK_INT >= 26
+  }
+
+  private fun canEnterPiPMode(): Boolean {
+    if (!supportsPipMode()) return false
+
+    val context: Context? = activityPluginBinding?.activity?.applicationContext
+    if (context != null) {
+      val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+      return if (Build.VERSION.SDK_INT < 29) {
+        appOpsManager.checkOpNoThrow(AppOpsManager.OPSTR_PICTURE_IN_PICTURE, android.os.Process.myUid(), context.packageName) == AppOpsManager.MODE_ALLOWED
+      } else {
+        appOpsManager.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_PICTURE_IN_PICTURE, android.os.Process.myUid(), context.packageName) == AppOpsManager.MODE_ALLOWED
       }
     }
+
+    return false
+  }
+
+  private fun enterPipMode(): Boolean {
+    if (activityPluginBinding != null) {
+      if (!supportsPipMode()) {
+        throw PIPException("PIP mode not supported.");
+      }
+      if (!canEnterPiPMode()) {
+        throw PIPException("Couldn't enter PIP mode. Check permission.")
+      }
+      return activityPluginBinding!!.activity.enterPictureInPictureMode(PictureInPictureParams.Builder().build())
+    }
+    return false
   }
 
   private fun setActivityBinding(binding: ActivityPluginBinding) {
@@ -110,6 +143,8 @@ class FlutterAutoPipPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Act
   }
 
   override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration?) {
-    eventSink?.success(isInPictureInPictureMode);
+    eventSink?.success(isInPictureInPictureMode)
   }
 }
+
+class PIPException(message: String) : Exception(message)
